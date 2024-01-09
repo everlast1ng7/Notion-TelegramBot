@@ -1,5 +1,5 @@
 import { Client } from '@notionhq/client';
-import { CreatePageResponse } from "@notionhq/client/build/src/api-endpoints";
+import { CreatePageResponse, QueryDatabaseResponse, CreatePageParameters } from "@notionhq/client/build/src/api-endpoints";
 import env from '../../env';
 import debug from 'debug';
 
@@ -12,9 +12,11 @@ const notion = new Client({
 const taskDB = env!.NOTION_TASK_DB;
 
 export default {
-    createTask: function (title: string, tgAuthor: string): Promise<CreatePageResponse> {
+    createTask: function (title: string, status: string, client: string, date: string, user: string, tgAuthor: number): Promise<CreatePageResponse> {
+        
         ll('creating task', title, 'from', tgAuthor);
-        return notion.pages.create({
+
+        var data: CreatePageParameters = {
             parent: {
                 database_id: taskDB
             },
@@ -30,34 +32,54 @@ export default {
                         }
                     ]
                 },
-                TGAuthor: {
-                    type: "rich_text",
-                    rich_text: [
+                Performers: {
+                    type: "people",
+                    people: [
                         {
-                            type: "text",
-                            text: {
-                                content: tgAuthor
-                            }
+                            id: user
                         }
                     ]
                 },
-                Status: {
-                    type: "select",
-                    select: {
-                        name: 'Backlog'
+                Tags: {
+                    type: 'status',
+                    status: {
+                        name: status==''?'Не начато':status
                     }
                 },
-                Source: {
-                    type: "select",
-                    select: {
-                        name: 'Telegram'
+                'Дедлайн': {
+                    type: 'date',
+                    date: {
+                        start: date
                     }
                 }
             }
+        }
 
-        });
+        if (client) {
+            data['properties']['Клиент'] = {
+                type: 'relation',
+                relation: [
+                    {
+                        id: client
+                    }
+                ]
+            }
+        }
+        
+        return notion.pages.create(data);
     },
     convertTaskToUrl: function (task: CreatePageResponse): string {
         return task.id.replace(/-/g, ''); // конвертируем id в рабочий для ссылки
+    },
+    getClients: function (client: string): Promise<QueryDatabaseResponse> {
+        return notion.databases.query({
+            database_id: '',
+            filter: {
+                property: 'Клиент',
+                title: {
+                  contains: client
+                }
+            }
+        });
     }
 };
